@@ -1,6 +1,7 @@
 #include "TM1637.h" //либа для дисплея на этой микре
 
-#define PIN_BTN 10 //пин кнопки
+#define PIN_BTN1 10 //пин кнопки
+#define PIN_BTN2 14 //пин 2-й кнопки
 #define PIN_SWITCH 11 //пин оптореле
 
 #define LCD_CLK 13 //дисплей такт
@@ -17,21 +18,35 @@
 
 
 
-byte btn=0;
+byte btn1 = 0, btn2 = 0;
+long btnTime1, btnTime2 = 0;
+byte inc1 = 0,inc2 = 0;
 TM1637 tm1637(LCD_CLK, LCD_DATA);
-int time = 10;
 
-#define MODE_TIME_INC 0
-#define MODE_TIME_DEC 1
-#define MODE_ACTION 2
-byte mode = MODE_TIME_INC;
+#define TIME_MAX 5000
+#define TIME_MIN 30
+int time = TIME_MIN;
 
-long pressedTime = 0;
+#define MODE_BEGIN 0
+
+#define MODE_TIME_CHANGE 0
+#define MODE_FIRE_ONCE 1
+#define MODE_FIRE_TIMES 2
+#define MODE_FIRE_TIMER 3
+#define MODE_FIRE 4
+
+#define MODE_LAST 4
+
+byte mode = MODE_BEGIN;
 
 void setup() {
   tm1637.init();
   tm1637.set(BRIGHT_TYPICAL);
-  digitalWrite(PIN_BTN,HIGH);
+  tm1637.point(false);
+  
+  digitalWrite(PIN_BTN1,HIGH);
+  digitalWrite(PIN_BTN2,HIGH);
+  
   pinMode(LED_BUILTIN,OUTPUT);
   pinMode(PIN_SWITCH,OUTPUT);
 }
@@ -39,6 +54,91 @@ void setup() {
 byte flag = 0;
 
 void loop() {
+  delay(10);
+
+  //button 0
+  if (digitalRead(PIN_BTN1) == LOW) {
+    if (btn1 == 0) {
+      btn1 = 1;
+      btnTime1 = millis();
+      //down  
+      btnDown(0);
+    } else { 
+      //press
+      btnPress(0);
+    }
+  } else {
+    if (btn1 == 1) {
+      btn1 = 0;
+      //up
+      btnUp(0);
+    }
+  }
+
+  //button1
+  
+  if (digitalRead(PIN_BTN2) == LOW) {
+    if (btn2 == 0) {
+      btn2 = 1;
+      btnTime2 = millis();
+      //down  
+      btnDown(1);
+    } else { 
+      //press
+      btnPress(1);
+    }
+  } else {
+    if (btn2 == 1) {
+      btn2 = 0;
+      //up
+      btnUp(1);
+    }
+  }
+
+  
+  tm1637.display(mode);
+}
+
+void btnDown(byte btn) {
+  if (btn1 == 1 && btn2 == 1 && millis() - btnTime1 < 100 && millis() - btnTime2 < 100) {
+    mode++;
+    if (mode > MODE_LAST)
+      mode = MODE_BEGIN;
+  }  
+}
+
+void btnPress(byte btn) {
+  if (mode == MODE_TIME_CHANGE) {
+    if (btn == 0  && btn2 == 0 && millis() - btnTime1 > 100) {
+      if (inc1 == 0 || millis() - btnTime1 > 1000) {
+        inc1 = 1;
+        if (time < TIME_MAX)
+          time++;
+      }
+    }
+    if (btn == 1 && btn1 == 0 && millis() - btnTime2 > 100) {
+      if (inc2 == 0 || millis() - btnTime2 > 1000) {
+        inc2 = 1;
+        if (time > TIME_MIN)
+          time--;
+      }
+    }
+  }
+  
+}
+
+void btnUp(byte btn) {
+  if ((btn == 0 && btn2 == 1 && millis() - btnTime1 < 50 && millis()- btnTime2 < 50) || 
+    (btn == 1 && btn1 == 1 && millis() - btnTime1 < 50 && millis()- btnTime2 < 50) ) {
+    mode++;
+    if (mode > MODE_LAST) 
+      mode = MODE_BEGIN;
+  }
+  if (btn == 0) inc1 = 0;
+  if (btn == 1) inc2 = 0;
+}
+
+/*void loop() {
   flag = 0;
   delay(5);
   
@@ -99,4 +199,4 @@ void loop() {
   if (flag == 0) {
     tm1637.display(time);
   }
-}
+}*/
