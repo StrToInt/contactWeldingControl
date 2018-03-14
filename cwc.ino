@@ -20,26 +20,27 @@
 
 byte btn1 = 0, btn2 = 0;
 long btnTime1, btnTime2 = 0;
-byte inc1 = 0,inc2 = 0;
 TM1637 tm1637(LCD_CLK, LCD_DATA);
+byte modeChange = 0;
 
 #define TIME_MAX 5000
 #define TIME_MIN 30
 int time = TIME_MIN;
+byte timeIncDec = 0;
 
 #define MODE_BEGIN 0
 
 #define MODE_TIME_CHANGE 0
 #define MODE_FIRE_ONCE 1
-#define MODE_FIRE_TIMES 2
-#define MODE_FIRE_TIMER 3
-#define MODE_FIRE 4
+#define MODE_FIRE_INTERVAL 2
+#define MODE_FIRE 3
 
-#define MODE_LAST 4
+#define MODE_LAST 3
 
 byte mode = MODE_BEGIN;
 
 void setup() {
+  Serial.begin(9600);
   tm1637.init();
   tm1637.set(BRIGHT_TYPICAL);
   tm1637.point(false);
@@ -95,47 +96,84 @@ void loop() {
     }
   }
 
-  
-  tm1637.display(mode);
+  if (modeChange == 0) {
+    if (mode == MODE_TIME_CHANGE) {
+      if (btn1 == 0) {
+        //int8_t msg[] = {time,175,21,0x0C};
+        tm1637.display(time);
+        Serial.println(time);
+      }
+    } else {
+      showMode();
+    }
+  }
+  Serial.println(time);
 }
 
+//button actions
+
 void btnDown(byte btn) {
-  if (btn1 == 1 && btn2 == 1 && millis() - btnTime1 < 100 && millis() - btnTime2 < 100) {
-    mode++;
-    if (mode > MODE_LAST)
-      mode = MODE_BEGIN;
-  }  
+  if (btn == 1) {
+    if (mode == MODE_TIME_CHANGE) {
+      if (timeIncDec == 0) {
+        //inc
+        if (time < TIME_MAX) time ++;
+      } else {
+        //dec
+        if (time > TIME_MIN) time --;
+      }
+    }
+  }
+  if (btn == 0) {
+    if (mode == MODE_TIME_CHANGE) {
+      timeIncDec = !timeIncDec;
+      if (timeIncDec == 0) {
+        int8_t msg[] = {100,175,21,0x0C};
+        tm1637.display(msg);
+      } else {
+        int8_t msg[] = {100,0xD,0xE,0x0C};
+        tm1637.display(msg);
+      }
+    }
+  }
 }
 
 void btnPress(byte btn) {
-  if (mode == MODE_TIME_CHANGE) {
-    if (btn == 0  && btn2 == 0 && millis() - btnTime1 > 100) {
-      if (inc1 == 0 || millis() - btnTime1 > 1000) {
-        inc1 = 1;
-        if (time < TIME_MAX)
-          time++;
-      }
-    }
-    if (btn == 1 && btn1 == 0 && millis() - btnTime2 > 100) {
-      if (inc2 == 0 || millis() - btnTime2 > 1000) {
-        inc2 = 1;
-        if (time > TIME_MIN)
-          time--;
+  if (btn == 1) {
+    if (mode == MODE_TIME_CHANGE) {
+      if (millis() - btnTime2 > 250) {
+        btnDown(1);   
       }
     }
   }
-  
+  if (btn == 0 && millis() - btnTime1 > 300) {
+    if (modeChange == 0) {
+      modeChange = 1;
+      mode++;
+      if (mode > MODE_LAST)
+        mode = MODE_BEGIN;
+      showMode();
+    }
+  }
 }
 
 void btnUp(byte btn) {
-  if ((btn == 0 && btn2 == 1 && millis() - btnTime1 < 50 && millis()- btnTime2 < 50) || 
-    (btn == 1 && btn1 == 1 && millis() - btnTime1 < 50 && millis()- btnTime2 < 50) ) {
-    mode++;
-    if (mode > MODE_LAST) 
-      mode = MODE_BEGIN;
+  if (btn == 0) {
+    modeChange = 0;
   }
-  if (btn == 0) inc1 = 0;
-  if (btn == 1) inc2 = 0;
+}
+
+void showMode() {
+  if (mode == MODE_FIRE_ONCE) {
+    int8_t msg[] = {0,21,0xC,0x0E};
+    tm1637.display(msg);
+  } else if (mode == MODE_FIRE_INTERVAL) {
+    int8_t msg[] = {100,175,21,22};
+    tm1637.display(msg);
+  } else if (mode == MODE_FIRE) {
+    int8_t msg[] = {0xF,175,19,0x0e};
+    tm1637.display(msg);
+  } 
 }
 
 /*void loop() {
