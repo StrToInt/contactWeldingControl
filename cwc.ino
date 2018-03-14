@@ -20,6 +20,11 @@
 
 byte btn1 = 0, btn2 = 0;
 long btnTime1, btnTime2 = 0;
+
+//interval mode
+byte intEnable = 0;
+long intTime = 0;
+byte intFlag= 0;
 TM1637 tm1637(LCD_CLK, LCD_DATA);
 byte modeChange = 0;
 
@@ -28,6 +33,8 @@ byte modeChange = 0;
 int time = TIME_MIN;
 byte timeIncDec = 0;
 
+
+//menu modes
 #define MODE_BEGIN 0
 
 #define MODE_TIME_CHANGE 0
@@ -36,8 +43,9 @@ byte timeIncDec = 0;
 #define MODE_FIRE 3
 
 #define MODE_LAST 3
-
 byte mode = MODE_BEGIN;
+
+#define INTERVAL_FREE_TIME 1000
 
 void setup() {
   Serial.begin(9600);
@@ -103,11 +111,26 @@ void loop() {
         tm1637.display(time);
         Serial.println(time);
       }
-    } else {
+    } else { 
       showMode();
     }
   }
-  Serial.println(time);
+
+  if (mode == MODE_FIRE_INTERVAL) {
+    if (intEnable != 0) {
+      if (millis() - intTime > INTERVAL_FREE_TIME) {
+        intFlag = !intFlag;
+        if (intFlag) {
+          weld(HIGH);
+          delay(time);
+          weld(LOW);
+        }
+        intTime = millis();
+      }
+    }
+  }  
+  
+
 }
 
 //button actions
@@ -122,16 +145,25 @@ void btnDown(byte btn) {
         //dec
         if (time > TIME_MIN) time --;
       }
+    } else if (mode == MODE_FIRE_ONCE) {
+      weld(HIGH);
+      delay(time);
+      weld(LOW);
+    } else if (mode == MODE_FIRE_INTERVAL) {
+      intEnable = !intEnable;
+      intTime = millis();
+    } else if (mode == MODE_FIRE) {
+      weld(HIGH);
     }
   }
   if (btn == 0) {
     if (mode == MODE_TIME_CHANGE) {
       timeIncDec = !timeIncDec;
       if (timeIncDec == 0) {
-        int8_t msg[] = {100,175,21,0x0C};
+        int8_t msg[] = {120,175,21,0x0C};
         tm1637.display(msg);
       } else {
-        int8_t msg[] = {100,0xD,0xE,0x0C};
+        int8_t msg[] = {120,0xD,0xE,0x0C};
         tm1637.display(msg);
       }
     }
@@ -150,6 +182,7 @@ void btnPress(byte btn) {
     if (modeChange == 0) {
       modeChange = 1;
       mode++;
+      weld(LOW);
       if (mode > MODE_LAST)
         mode = MODE_BEGIN;
       showMode();
@@ -160,7 +193,19 @@ void btnPress(byte btn) {
 void btnUp(byte btn) {
   if (btn == 0) {
     modeChange = 0;
+    weld(LOW);
+    intEnable = 0;
   }
+  if (btn == 1) {
+    if (mode == MODE_FIRE) {
+      weld(LOW);
+    }
+  }
+}
+
+void weld(byte state) {
+  digitalWrite(LED_BUILTIN,state);
+  digitalWrite(PIN_SWITCH,state);
 }
 
 void showMode() {
@@ -168,7 +213,7 @@ void showMode() {
     int8_t msg[] = {0,21,0xC,0x0E};
     tm1637.display(msg);
   } else if (mode == MODE_FIRE_INTERVAL) {
-    int8_t msg[] = {100,175,21,22};
+    int8_t msg[] = {120,175,21,22};
     tm1637.display(msg);
   } else if (mode == MODE_FIRE) {
     int8_t msg[] = {0xF,175,19,0x0e};
